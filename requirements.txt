@@ -1,1 +1,83 @@
+import streamlit as st
+from google import genai
+from google.genai import types
 
+# Page setup
+st.set_page_config(page_title="Christiani AI", page_icon="🤖", layout="wide")
+
+st.title("🤖 Christiani AI Assistant")
+st.caption("Powered by Gemini 2.5 Flash")
+
+# Sidebar configurations
+with st.sidebar:
+    st.header("⚙️ Configuration")
+    
+    # Secure API Key Input
+    api_key = st.text_input("Gemini API Key", type="password", help="Enter your Gemini API key from Google AI Studio")
+    
+    st.markdown("---")
+    st.subheader("Personality Settings")
+    system_instruction = st.text_area(
+        "System Prompt",
+        value="Your name is Christiani. You are an advanced, articulate, and empathetic AI assistant. "
+              "You excel at explaining complex technical concepts, coding, and logical problem-solving.",
+        height=100
+    )
+    
+    temperature = st.slider("Creativity (Temperature)", min_value=0.0, max_value=2.0, value=0.7, step=0.1)
+    
+    if st.button("Clear Conversation"):
+        st.session_state.messages = []
+        st.rerun()
+
+# Initialize Chat Memory
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Display Chat History
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# User Chat Input
+if prompt := st.chat_input("Ask Christiani anything..."):
+    if not api_key:
+        st.error("Please enter a valid Gemini API Key in the sidebar to talk to Christiani.")
+        st.stop()
+
+    # Append user message to state
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # Process response through Christiani
+    with st.chat_message("assistant"):
+        message_placeholder = st.empty()
+        
+        try:
+            # Initialize Client
+            client = genai.Client(api_key=api_key)
+            
+            # Format message history for SDK
+            formatted_contents = [
+                types.Content(role=msg["role"], parts=[types.Part.from_text(text=msg["content"])])
+                for msg in st.session_state.messages
+            ]
+
+            # Query the Gemini API
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=formatted_contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    temperature=temperature,
+                )
+            )
+
+            # Display and save response
+            full_response = response.text
+            message_placeholder.markdown(full_response)
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
+
+        except Exception as e:
+            st.error(f"Error generating response: {e}")
